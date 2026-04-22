@@ -1,0 +1,11 @@
+{
+  "name": "obsidian-bridge",
+  "version": "0.1.0",
+  "description": "Bridge Claude Code sessions into an Obsidian vault. Writes structured markdown notes with YAML frontmatter to an Inbox folder for human triage. Zero access to other vaults on the machine.",
+  "author": {
+    "name": "Jackie Martinez",
+    "email": ""
+  },
+  "license": "MIT",
+  "keywords": ["obsidian", "memory", "notes", "second-brain", "knowledge-management"]
+}

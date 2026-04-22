@@ -1,0 +1,16 @@
+{
+  "name": "obsidian-bridge",
+  "owner": {
+    "name": "Jackie Martinez"
+  },
+  "plugins": [
+    {
+      "name": "obsidian-bridge",
+      "source": ".",
+      "description": "Writes Claude Code session notes into a specified Obsidian vault's Inbox folder. Inbox-only write policy by default.",
+      "version": "0.1.0",
+      "category": "knowledge-management",
+      "strict": true
+    }
+  ]
+}
