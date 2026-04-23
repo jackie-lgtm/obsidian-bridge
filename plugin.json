@@ -1,7 +1,10 @@
 {
   "name": "obsidian-bridge",
-  "version": "0.1.0",
-  "description": "Bridge Claude Code sessions into an Obsidian vault. Writes structured markdown notes with YAML frontmatter to an Inbox folder for human triage. Zero access to other vaults on the machine.",
+  "version": "0.2.0",
+  "description": "Conversational memory referral system. Bidirectional bridge between claude-mem (canonical memory) and Obsidian (human interface). Surfaces relevant past context inline during conversation, captures voice streams as atomic linked notes, maintains a user-profile note, and auto-generates thought-cluster notes. Optimized for voice-first ADHD-pattern thinkers on a ~500-token-per-turn memory budget. Hard dependency on claude-mem.",
+  "dependencies": {
+    "plugins": ["claude-mem"]
+  },
   "author": {
     "name": "Jackie Martinez",
     "email": ""

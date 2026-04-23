@@ -1,48 +1,74 @@
 # obsidian-bridge
 
-A Claude Code plugin that writes session notes into a specified Obsidian vault. Inbox-only write policy by default — the human triages into hub notes themselves.
+A conversational memory referral system for Claude Code users who think and talk fast.
 
-## What it does
+**What it does:**
+- Makes your past conversations *findable* — surfaces relevant memory inline during live chat
+- Captures voice streams as atomic, linked Obsidian notes (not walls of text)
+- Maintains a lightweight "About Brian" profile note so every session starts with context
+- Builds auto-generated "Cluster" notes that show you your own thought groupings
+- Does it all on a ~500-token-per-turn budget
 
-When you tell Claude "save this to Obsidian" (or similar), this skill:
+**Built for:** voice-first, ADHD-pattern thinkers who use Whisper AI + Claude Code and need their memory system to keep up without burning tokens.
 
-1. Shows you a preview (filename + frontmatter + first 10 lines)
-2. Waits for your explicit approval
-3. Writes the note to your vault's `99 - Inbox/` folder
-4. Never touches existing notes
-5. Never reads other vaults on your machine
+## Architecture
+
+```
+┌─────────────────────┐   writes     ┌─────────────────────┐
+│   claude-mem        │ ───────────► │  Obsidian vault     │
+│   (canonical memory)│ ◄─────────── │  (human interface)  │
+│   SQLite + vectors  │   ref-links  │  Bryan Brain        │
+└─────────────────────┘              └─────────────────────┘
+           ▲                                   ▲
+           │          ┌──────────────┐         │
+           └──────────│ Entity Index │─────────┘
+                      │ ~5KB JSON    │
+                      └──────────────┘
+```
+
+- **claude-mem** — canonical memory, auto-captures every session
+- **Obsidian** — human-readable interface, graph-navigable
+- **Entity Index** — tiny JSON file for cheap-as-free retrieval during chat
+
+Every Obsidian note has `memory-ref: mem_<id>` in frontmatter. Every claude-mem observation can link back to its Obsidian note. **No orphans in either direction.**
+
+## Prerequisites
+
+| Requirement | Why |
+|---|---|
+| **Claude Code** | Host |
+| **claude-mem plugin** (`thedotmack/claude-mem`) | **Hard dependency.** The skill refuses to run without it. |
+| **Obsidian** + any vault | Where notes are written |
+| **macOS** | The vault resolver script is macOS-specific |
+| **Obsidian Sync** ($5/mo) *recommended* | Keeps vault synced across devices independent of iCloud |
 
 ## Install
 
-### Prerequisites
+### 1. Install claude-mem first (required)
 
-- Claude Code installed and working
-- Obsidian installed, with at least one vault open at least once (so Obsidian's registry file exists)
-- macOS (the vault resolver script is macOS-specific)
+```
+/plugin marketplace add thedotmack/claude-mem
+/plugin install claude-mem
+```
 
-### Install steps
+Restart Claude Code.
 
-From Claude Code, add this plugin's marketplace:
+### 2. Install obsidian-bridge
 
 ```
 /plugin marketplace add <path-or-url-to-this-repo>
-```
-
-Then install:
-
-```
 /plugin install obsidian-bridge
 ```
 
 Restart Claude Code.
 
-### First-run configuration
+### 3. First-run setup
 
 The first time you ask Claude to save something to Obsidian, it will prompt you for:
 - Your vault name (e.g., `Bryan Brain`)
 - The absolute path to your vault
 
-Claude writes the config to `~/.claude/obsidian-bridge.config.json`. You can edit this file directly if your vault path changes.
+Claude writes config to `~/.claude/obsidian-bridge.config.json`.
 
 Example config:
 
@@ -51,72 +77,137 @@ Example config:
   "vault_name": "Bryan Brain",
   "vault_path": "/Users/brian/Library/Mobile Documents/iCloud~md~obsidian/Documents/Bryan Synced Brain/Bryan Brain",
   "inbox_folder": "99 - Inbox",
-  "write_policy": "inbox_only",
-  "owner": "Brian"
+  "clusters_folder": "00 - Clusters",
+  "profile_note": "About Brian.md",
+  "owner": "Brian",
+  "surfacing_mode": "inline",
+  "token_budget_per_turn": 500,
+  "atomic_splitting": "aggressive"
 }
 ```
 
-### Verify vault detection
+### 4. Build the entity index (first time)
 
-You can test the vault resolver script directly:
+After you've had at least one conversation, run:
 
 ```bash
-~/.claude/plugins/.../skills/obsidian-bridge/scripts/resolve-vault.sh "Bryan Brain"
+~/.claude/plugins/cache/*/obsidian-bridge/*/skills/obsidian-bridge/scripts/build-entity-index.sh
 ```
 
-It should print the absolute path to your vault. If it fails, check:
-- Is Obsidian installed?
-- Have you opened the vault in Obsidian at least once?
-- Is the vault name spelled exactly as Obsidian shows it?
+This builds `~/.claude/obsidian-bridge.entities.json` from your claude-mem observations + vault frontmatter.
 
-## Usage
+### 5. (Recommended) Set up weekly entity index rebuild
 
-Ask Claude to save a note:
-
-```
-> Save this conversation to Obsidian
-> Log this decision to my brain
-> Add this insight to my notes
+Add a launchd job or cron to rebuild weekly. Example cron:
+```bash
+0 2 * * 0  ~/.../skills/obsidian-bridge/scripts/build-entity-index.sh
 ```
 
-Claude will:
-1. Generate a filename: `YYYY-MM-DD-HHMM - {slug}.md`
-2. Generate frontmatter with `type`, `tags`, `status: inbox`, etc.
-3. Generate a structured body (Summary, Details, Related, Source)
-4. Show you a preview
-5. Wait for `yes` / `confirmed` before writing
+## How to use it
 
-## Triage workflow
+### Save a note during conversation
 
-After Claude writes a note, it lives in `{vault}/99 - Inbox/`. Open Obsidian:
+```
+> Okay, capture this — I think the churn spike is from onboarding friction
+  specifically step 3 where people have to configure SSO, and we should
+  just skip it for trials.
+```
 
-1. Sort the Inbox folder by filename (newest/oldest first)
-2. Read each note's `## Summary` section
-3. Decide: keep, merge, or discard
-4. For keepers: move to the appropriate folder, change `status: inbox` → `status: triaged`
-5. Add `[[wiki-links]]` to relevant hub notes
+Claude silently drafts atomic notes. At the next natural pause:
 
-See `skills/obsidian-bridge/reference/folder-structure.md` for a recommended vault layout.
+```
+📝 Captured 3 atomic notes (thread t9k4):
+  1. Churn spike hypothesis: onboarding friction
+  2. Specific friction point: SSO config at step 3
+  3. Proposed fix: skip SSO for trials
+
+Write all to Inbox? (yes / keep 1,3 / scrap)
+```
+
+You say `yes`, they land in `Bryan Brain/99 - Inbox/`. Triage them when you want.
+
+### Get a memory referral during chat
+
+```
+> What was the deal with Project Alpha's auth decision?
+```
+
+Claude:
+```
+We landed on JWT tokens in the Apr 18 session. Key context: Sarah's team
+needed stateless scaling, Marcus flagged the mobile refresh-token issue.
+The decision note is [[2026-04-18 - decision - auth-jwt]].
+
+↪ Pull up the full decision note? Or the surrounding thread?
+```
+
+(Notice: minimal retrieval, offers escalation, never pre-fetches full notes.)
+
+### See your thought clusters
+
+Open `Bryan Brain/00 - Clusters/` in Obsidian. You'll see notes like:
+- `Cluster - Customer Retention.md`
+- `Cluster - Project Alpha.md`
+- `Cluster - Team Hiring.md`
+
+Each one shows:
+- **Thought threads** — linked chains of atomic notes
+- **People mentioned** — wiki-linked
+- **Open questions** — things you raised but didn't resolve
+- **Recent decisions** — what you actually decided
+
+These are **auto-generated weekly**. They are your thinking, surfaced back to you.
 
 ## Safety guarantees
 
 This skill will **never**:
-- Modify existing notes in your vault
-- Write outside the configured Inbox folder
-- Read notes from other vaults on your machine
-- Upload vault content to any remote service
-- Bulk-import, bulk-delete, or reorganize notes
+- ❌ Modify your hand-written notes (`source: manual` is untouchable)
+- ❌ Write outside `99 - Inbox/`, `00 - Clusters/`, or `About Brian.md`
+- ❌ Read notes in other vaults on your machine
+- ❌ Upload your vault to any remote service
+- ❌ Bulk-reorganize your existing notes
+- ❌ Create hallucinated wiki-links (only links entities you actually referenced)
+- ❌ Update "About Brian" based on a single off-hand mention (requires 3+ confirmations)
 
-## Configuration reference
+## Token budget
 
-See the files in `skills/obsidian-bridge/reference/` for:
-- `naming-conventions.md` — filename rules
-- `frontmatter-schema.md` — YAML frontmatter spec
-- `folder-structure.md` — recommended vault organization
+| Operation | Cost | Frequency |
+|---|---|---|
+| Session startup (index + profile) | ~500 tokens | Once per conversation |
+| Entity detection per turn | 0 tokens (string match) | Every turn |
+| Inline referral (when entity matches) | ~40 tokens | On detection |
+| Summary lookup (tier 2) | ~150 tokens | Only when you engage |
+| Full context (tier 3+) | 400-2000 tokens | Only on explicit ask |
+
+Target: **≤ 500 tokens per turn on memory operations.**
+
+## File structure
+
+```
+obsidian-bridge/
+├── README.md
+├── plugin.json
+├── marketplace.json
+└── skills/
+    └── obsidian-bridge/
+        ├── SKILL.md                       ← main skill definition
+        ├── reference/
+        │   ├── referral-system.md         ← entity index + clustering
+        │   ├── voice-to-atomic.md         ← voice → atomic notes
+        │   ├── user-profile.md            ← About Brian maintenance
+        │   ├── token-budget.md            ← tiered retrieval protocol
+        │   ├── naming-conventions.md      ← filename rules
+        │   ├── frontmatter-schema.md      ← YAML schema + tag taxonomy
+        │   └── folder-structure.md        ← vault layout
+        └── scripts/
+            ├── resolve-vault.sh           ← find vault path by name
+            └── build-entity-index.sh      ← rebuild entity index from claude-mem + vault
+```
 
 ## Versioning
 
-This plugin follows semver. Current version: `0.1.0`.
+- `0.2.0` — Full referral system architecture. Bidirectional claude-mem ↔ Obsidian. Voice-to-atomic note splitting. About Brian profile. Cluster auto-generation. Token-budgeted retrieval.
+- `0.1.0` — Initial scaffold (simple Inbox-only writer).
 
 ## License
 

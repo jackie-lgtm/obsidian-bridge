@@ -7,8 +7,8 @@
     {
       "name": "obsidian-bridge",
       "source": ".",
-      "description": "Writes Claude Code session notes into a specified Obsidian vault's Inbox folder. Inbox-only write policy by default.",
-      "version": "0.1.0",
+      "description": "Conversational memory referral system. Bidirectional claude-mem \u2194 Obsidian bridge. Surfaces past context inline, captures voice streams as atomic notes, builds thought clusters. Requires claude-mem.",
+      "version": "0.2.0",
       "category": "knowledge-management",
       "strict": true
     }
